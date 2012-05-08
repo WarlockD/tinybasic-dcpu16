@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<project>
+  <name>text</name>
+  <files>
+    <file path="buffered.10c" />
+    <file path="screen_functions.10c" />
+    <file path="string_functions.10c" />
+    <file path="expressions.10c" />
+    <file path="errors.10c" />
+    <file path="basic_states.10c" />
+    <file path="math_functions.10c" />
+    <file path="basic_functions.10c" />
+    <file path="textarea.10c" />
+  </files>
+</project>

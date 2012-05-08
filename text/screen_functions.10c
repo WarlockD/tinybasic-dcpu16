@@ -1,0 +1,120 @@
+:display_offset	; Display current char position
+DAT 0x0000
+:display_root ; Display root
+DAT 0x8000
+
+:hardware_init
+; Find the display
+:get_display
+add [display_address], 1
+hwq [display_address]
+ifn a, 0xf615      ; ID for the LEM1802 monitor
+sub pc, 7
+
+ add i, 1				 ; inc the address pointer
+set a, 0                     
+set b, 0x8000
+hwi [display_address]     ; print to monitor
+set [display_root], 0x8000
+set [display_offset], 0x8000
+
+; Find the keyboard
+:get_keyboard
+add [keyboard_address], 1
+hwq [keyboard_address]
+ifn a, 0x7406      ; ID for the keyboard
+sub pc, 7
+set pc, pop 
+
+:getchar
+set push, a
+set a, 1
+hwi [keyboard_address]
+set a, pop
+set pc, pop
+
+:getchar_block
+set push, a
+set c, 0
+set a, 1
+hwi [keyboard_address]
+ife c, 0
+sub pc, 5 
+set a, pop
+set pc, pop
+
+:putchar
+set push, i
+set push, j
+set push, c
+set i, [display_offset]  ; go to current display offset
+set [i], ' '
+bor [i], [text_color]	 ; blank the location first
+
+ife C, 0x11				  
+set pc, putchar_newline	  
+ife C, 0x10
+set pc, putchar_backspace
+and [i], 0xFF00			; get rid of the blank
+bor [i], c				; lets put the real char in
+add i, 1
+:putchar_finish
+set j, [display_root]
+set c, i
+sub c, j
+ife c, 0x180			; we are beyond the screen
+JSR putchar_scroll
+set [i], [cursor]		; print the curser
+set [display_offset], i
+set c, pop
+set j, pop
+set i, pop
+set pc, pop
+:putchar_scroll
+set i, j				; set both to root display
+add j, 0x20				; add to next line
+set c, i				; set c to root address
+add c, 0x160			; set c to end of display
+sti [i], [j]			; copy first byte
+ifn c, i				; if we are not at the end of space
+sub pc, 3				; go back till copyed
+set j, 0				; clear j to count the number of chars
+set c, ' '
+bor c, [text_color]		; set c to bank charater
+sti [i], c				; blank line
+ifn j, 0x20				; not equal end of line
+sub pc, 4				; go back till done
+sub i, 0x20				; set i to begining of line
+set pc, pop
+
+:putchar_newline
+and i, 0xffe0	; go to the begining of the current line
+add i, 0x20		; then go to the end
+set pc, putchar_finish
+:putchar_backspace
+set j, i
+and j, 0xffe0	; get begining of the line
+ife i,j			; if we are at the begining of the line
+set pc, putchar_finish
+sub i,1		    ; add 1 for the prompt
+set [i], ' '    ; blank the space 
+bor [i], [text_color]	 ; blank the location first
+set pc, putchar_finish
+
+:end
+set pc, end
+
+:display_address
+DAT 0xFFFF
+
+:keyboard_address
+DAT 0xFFFF
+
+:keyboard_buffer
+DAT 0
+
+:text_color
+DAT 0x7000
+
+:cursor
+DAT 0x709F

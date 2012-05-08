@@ -1,0 +1,105 @@
+
+; Note, All string fuctioons print or read I as the incoming buffer
+; that pointer is pushed and returned with no changes
+; J is the pointer to the end of the changes in I
+; more often than not, I need the end buffer location
+; rather than the size
+; C is ALWAYS THRASHED AND UNPREDITABLE but usally is the last char
+; printed or edited
+;; Code by Chase, Mrrl, fizzup, and M4v3R
+;; https://github.com/Chase-san/dcpu-xbios/blob/master/xbios.dasm
+
+
+; Print string will print I with a terminating charater of a
+; J will have the current position
+; thrashes c
+:print_string
+	set J, I
+	set c, [J]		; get the charater from the string
+	ife c, a		; are we at the end?
+	set pc, pop
+	JSR putchar		; print it
+	ife c, 0x11		; do we have a return?
+	set pc, pop		; then return
+	add J, 1		; add to string pointer and retry
+	sub pc, 9
+
+; takes string in I and returns number to A
+; if I points after the number, j is amount of digitis
+:test_short
+	set a, 0
+	set j, i
+	set c, [i]
+	sub c, 0x30
+	ifg c, 9
+	set pc, pop
+	mul a, 10
+	ife ex, 1
+	set pc, QOVER
+	add a, c
+	add i, 1
+	sub pc, 12
+	
+
+
+
+; will print signed short in A to buffer I.  thrashes c
+:print_short
+	set push, i
+	set push, a			; save A
+	JSR check_sign
+	ifn a, peek			; check if we changed the sign
+	sti [i], '-'		; if we did, print neg
+	set push, 0			; put in mark
+	set c, a			; get A
+	mod c, 10			; shift the 10 out
+	div a, 10
+	add c, '0'			; change it to ansi
+	set push, c			; push the letter 
+	ife a, 0			; if no more numbers
+	add pc, 2			; jump out
+	sub pc, 9			; and check do the new
+	sti [i], pop		; print the charater
+	ifn peek, 0		    ; if we are at 0
+	sub pc, 3			; go back and print again
+	set c, pop			; pop out the mark	
+	set j, i		    ; return the end position
+	set a, pop
+	set i, pop
+	set pc, pop
+
+	
+:push_hex_unsigned_short
+	
+	ifl J, 11
+	mod j, 10
+	mod j, 0x7030
+			
+
+; Just skips the whitepsacves, in I string
+:skip_blanks
+		set push, j
+:sb1	ife [I], ' '
+		sti pc, sb1
+		set j, pop
+		set pc, pop
+
+
+; used for the text area moving
+; moves a block up
+; J = address to copy to, I=from, quits when A = I
+:move_up
+		ife a, i
+		set pc, pop
+		sti [j], [i]
+		set pc, move_up
+:move_down
+		std [j],[i]		  ; does two subtracts for the price of 1
+		ifn a,i				
+		set pc, move_down ; order has to be diffrent but it work woo
+		set [j], [i]
+		set pc, pop
+
+	
+
+

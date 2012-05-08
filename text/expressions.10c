@@ -1,0 +1,291 @@
+; get jump address, table is in j, return address is in C.  0 if not found J, c, as always, and b is thrashed
+; i points to after the compared text if valid or before
+
+:exec		JSR skip_blanks	; skip blanks  		
+			set z, i		; backup for retry
+:ex1		ife [j],[i]		; loop till we are not equal
+ 			sti pc, ex1     
+			ifg [j], 0x7F	; is it a char or a pointer
+ 			set pc, [j] 	; its a pointer so we finish, jump then
+:ex2		ifl [j], 0x7F	; not a pointer so we go to next table
+			sti pc, ex2		
+			add j,1			; skip the pointer
+			set i, z		; restore string pointer
+			set pc, ex1		; retry
+
+:STMT_TABLE
+	DAT "PRINT", STMT_PRINT
+	DAT "LIST", STMT_LIST
+	DAT "LET", STMT_LET
+	DAT QSORRY
+:STMT	JSR FLIN			; find the current line
+		ife y,0xFFFF		; if we arn't running
+		set pc, pop			; then just jump out
+		set i, z			; get the line
+		add i, 1			; skip the line number
+:DIRECT	set push, i			; back up the string pointer
+		set j, STMT_TABLE	; get the string lookup table
+:STMT1	ife [i],[j]			; check the table agenst the string
+		sti pc, STMT1		; loop if equal
+		ifg [j], 127		; are we at the end of the first string?
+		set pc, STMT3		; yes? then lets run it
+:STMT2	ifl [j], 127		; no? then lets find the end	
+		sti pc, STMT2
+		add j,1				; skip it to the next
+		set i, peek			; restore the string ponter
+		set pc, STMT1		; loop
+:STMT3	set x, 0		; the function returns X as the next line number
+		JSR [j]			; do the call from the table
+		set i, pop		; get back the string
+		ife y,0xFFFF	; if we arn't running
+		set pc, pop		; then just jump out
+		ife x,y			; if x didn't change
+		add x,1			; then just inc
+		set y, x		; go to the new address
+		set pc, STMT
+		
+				
+; skips spaces and goes to the next token
+:BLANKS ifn [i], 0x32		; not equal a space
+		set pc, pop
+		add i, 1
+		sub pc, 5
+		
+:NLINE	set c, 0x11
+		jsr putchar
+		set pc, pop
+
+:STMT_LIST
+		set push, z
+		set z, [text_begin]
+:LIST0	ife [z], 0xFFFF		; last line?
+		set pc, LIST1
+		jsr print_line
+		set z, c
+		set pc, LIST0
+:LIST1	set z, pop
+		set pc, pop
+:STMT_LET
+		jsr TSTV		; test for LET (var)
+		DAT QWHAT	
+		jsr TSTC		; test for LET (var) = 
+		DAT '='
+		DAT QWHAT		
+		set push, a		; push address of (var)
+		jsr EXPR		; get the expresion LET (var) = (expr)
+		ifn [i], 0x11	; not at end of line?
+		set pc, QWHAT	; sytaxerror
+		set b, pop		; pop the var address
+		set [b], a		; assign it to a
+		set a, b		; a returns with the last value assigned
+		set pc, pop		; done go back
+
+:STMT_PRINT
+:STPRT0	jsr TSTC
+		DAT 0x11		; test for simple return
+		DAT STPRT1
+		set c, 0x11
+		JSR putchar
+		set pc, pop		; done go back
+:STPRT1	jsr TSTC
+		DAT '"'			; test for quote
+		DAT STPRT2
+		set a, '"'
+		jsr PRS
+		set pc, STPRT3
+:STPRT2 jsr EXPR
+		jsr PRN
+		set pc, STPRT0
+:STPRT3 jsr TSTC		; test for more
+		DAT ','			; commas are givne new lines
+		DAT STPRT4
+		set c, 0x11
+		JSR putchar
+		set pc, STPRT0
+:STPRT4	jsr TSTC		; test for ;
+		DAT ';'
+		DAT STPRT5
+		jsr TSTC
+		DAT 0x11		; test if end of line, then don't put the new line
+		DAT STPRT1
+		ifn [i], 0x11	; not at end of line?
+		set pc, QWHAT	; sytaxerror
+		set pc, pop
+:STPRT5 ifn [i], 0x11	; not at end of line?
+		set pc, QWHAT	; sytaxerror
+		set c, 0x11
+		JSR putchar
+		set pc, pop		; done go back
+
+	
+
+:VAL DAT 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 
+:TSTV 	set a, [i]		; get the charater
+		set c, pop		; get the pc
+		sub a, 'A'		; turn to offset
+		ifg a, 26		; greater than the leters, not A-Z
+		set pc, [c]		; go to jump
+		add i, 1		; skip the letter
+		add a, VAL		; add to offset
+		add c, 1		; skip over if we are good
+		set pc, c		; A has the address of val	
+
+; changed to only use abc and got rid of a memory leak
+:TSTN	set A, 0		; test if we have a number
+		set push, i
+:TSTN0	set c, [i]
+		sub c, 0x30
+		ifg c, 9
+		set pc, TSTN1	; if not a char skip
+		add i, 1
+		mul a, 10		; shift a by 10
+		ifg ex,0		; is the number to big for a ushort?
+		set pc, QOVER	; then dump
+		add a, c
+		set pc, TSTN0
+:TSTN1	set c, pop		; get text ptr
+		ifn c, i		; did we find any digits?
+		set pc, TSTN2	; then jump
+		set c, pop		; pop the pc
+		set pc, [c]		; jump
+:TSTN2	set c, pop		; pop the pc
+		add c, 1		; skip the call
+		set pc, c	
+; print number in a, return a and b unmolested		
+:PRN	set push, a
+		JSR check_sign
+		ife a, peek			; check if we changed the sign
+		set pc, PRN0
+		set c, '-'
+		jsr putchar
+:PRN0	set push, 0		; push mark
+:PRN1	set c, a		; set c to a
+		mod c, 10		; convert
+		div a, 10		; shift	
+		add c, '0'		; change to ansi
+		set push, c		; push the number
+		ifn a, 0		; if not equal to 0
+		set pc, PRN1	; keep going
+:PRN2	set c, pop		; get the charater
+		ife c, 0		; we at mark?
+		set pc, PRN3	; then leave
+		JSR putchar		; print the char
+		set pc, PRN2
+:PRN3	set a, pop
+		set pc, pop
+; print line pointed to at Z, return next in C
+:print_line
+		set push, i
+		set push, j
+		set i, z
+		sti a, [i]
+		jsr PRN
+		set a, 0
+		jsr PRS
+		set c, i
+		set j, pop
+		set i, pop
+		set pc, pop	
+		
+:PRS
+	sti c, [I]		; get the charater from the string
+	ife c, a		; are we at the end?
+	set pc, pop
+	JSR putchar		; print it
+	ife c, 0x11		; do we have a return?
+	set pc, pop		; then return
+	set pc, PRS		
+; check for charater in pc +1, if it exisits skip pc +2
+; else call pc +2 and skip to next token
+
+:TSTC	set c, pop
+		ifn [c], [i]
+		set pc, [c+1]
+		add i,1			; skip it
+		add c, 2	 	; skip over char and token
+		set pc , c
+; samve thing with null strings 
+
+:TSTS	set z, pop
+		set push, i		; backup the string pointer
+		set j, [z]
+:TSTS0	ife [i], [j]
+		sti pc, TSTS0
+		ife [j], 0		; if the string is at the end (match)
+		set pc, TSTS1	; handle match
+		set i, pop		; the pointer didn't move
+		set pc, [z+1]	; jump to address
+:TSTS1	set j, pop		; pop the old pointer to j (debugging mainly)
+		add z, 2		; skip over
+		set pc, z		; i is already +1
+		
+
+:EXPR	JSR TSTC			; untary + and -
+		DAT '-'
+		DAT E0
+		jsr TERM
+		xor a,0xFFFF		; neg it
+		add a,1				; 2s comp
+		set pc, E1
+:E0		JSR TSTC
+		DAT '+'				; unitary + we just skip
+		DAT E1A
+:E1A	jsr TERM
+:E1		jsr TSTC				; handle add
+		DAT '+'
+		DAT E2
+		set push, a
+		jsr TERM
+		set b, pop
+		add b, a
+		set a, b
+		set pc, E1		; test for more terms
+:E2		jsr TSTC			; handle sub
+		DAT '-'
+		DAT E3
+		set push, a
+		jsr TERM
+		set b, pop
+		sub b, a
+		set a, b
+		set pc, E1		; test for more terms	
+:E3		set pc, pop		
+
+:TERM	jsr FACT
+:T0		jsr TSTC
+		DAT '*'
+		DAT T1
+		set push, a
+		jsr FACT
+		set b, pop
+		mli b, a
+		set a, b
+		set pc, T0
+:T1		jsr TSTC
+		DAT '/'
+		DAT T2
+		set push, a
+		jsr FACT
+		set b, pop
+		dvi b, a
+		set a, b
+		set pc, T0			
+:T2		set pc, pop
+
+:FACT	jsr TSTV		; test if we are refrencing a value
+		DAT F0
+		set a, [a]		; get the value in the varables
+		set pc, F2
+:F0		jsr TSTN		; test if we have a number
+		DAT F1
+		set pc, F2
+:F1		jsr TSTC
+		DAT '('
+		DAT QWHAT
+		jsr EXPR
+		jsr TSTC
+		DAT ')'
+		DAT QWHAT
+:F2		set pc, pop
+		
+

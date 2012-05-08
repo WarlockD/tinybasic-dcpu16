@@ -1,0 +1,9 @@
+; checks the the sign of A
+:check_sign
+	ifc a, 0x8000		; check if neg
+	set pc, pop			; not negitive
+:change_sign
+	xor a,0xFFFF		; convert to neg
+	add a,1				; 2s comp
+	set pc, pop
+	
