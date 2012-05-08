@@ -1,0 +1,32 @@
+:HOW DAT "HOW?", 0x11
+:WHAT DAT "WHAT?", 0x11
+:SORRY DAT "SORRY?", 0x11
+:OVERFLOW DAT "OVERFLOW?", 0x11
+
+:QOVER  set push, j
+		set push, i
+:AOVER  set i, OVERFLOW
+		set pc, ERROR
+:QWHAT	set push, j
+		set push, i
+:AWHAT  set i, WHAT
+		set pc, ERROR
+:QHOW	set push, j
+		set push, i
+:AHOW  	set i, HOW
+		set pc, ERROR
+:QSORRY	set push, j
+		set push, i
+:ASORRY set i, SORRY
+		set pc, ERROR
+:ERROR  JSR print_string		; print the error
+		set sp, 0x000			; clear the stack
+		set pc, command_loop
+		
+		set PEEK, 0			; put a 0 at string where the error was
+		ife [current_line],0; check if we are running
+		set pc, command_loop	; if not just go back to the commad line
+		; find the line in the text area
+		; print it
+		; clean and restart the interpriter
+		set pc, command_loop

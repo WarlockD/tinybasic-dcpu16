@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<solution>
+  <name>textedit</name>
+  <projects>
+    <project path="text\text.10cproj" />
+  </projects>
+</solution>

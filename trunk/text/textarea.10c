@@ -1,0 +1,85 @@
+; All line searches search for the line sent to by Y and Z will have the pointer to the line
+; If Y cannot be found, Z willl hold the pointer to the next line.  Check Y = [Z] to make sure you have the 
+; correct line
+; To check if the line is found, just check if Z is diffrent than what you sent
+; this is done as I want X to contain the pointer to the current line while A,B,C are used for
+; statments and exprsions as well as I and J be for string pointers
+; also note, each line format is thus (unsigned short)string(eol)
+
+:FLIN	set z, [text_begin]		; change this latter
+:FLIN0	ife [z], y
+		set pc, pop			; we found the line
+		ifg [z], y			
+		set pc, pop			; we found the line after it
+		jsr NLIN
+		set pc, FLIN0
+		
+; NLIN finds the next line that is pointed to at Z
+; dosn't touch anything other than z
+:NLIN	add z,1					; skip line number, inc after
+ 		ifn [z], 0x11			; if end of line?
+		set pc, NLIN			; loop
+		add z,1					; skip eol
+		set pc, pop
+; this function takes no argument and is NEW, that is it will clear
+; the text area and properly set the pointers and dummy end line
+:init_textarea		
+		set push, i
+		set push, j
+		set i, [text_begin]
+		sti [i], 0xFFFF			; set the biggest line number
+		set [i], 0x11			; set the end mark for the line number
+		set [text_end], i		; set the text_end to the end of the buffer
+		set j, pop
+		set i, pop
+		set pc, pop
+
+		set pc, pop
+		
+; delete line will delete a line pointed at Z, Z will then point to the next line 
+; if the line does not exisit nothing is done
+; this is intensive operation as it shifts the entire
+; text area.  SLOW
+:DLIN	set push, j
+		set push, i
+		set j, z			; j now points to the line to be deleted
+		jsr NLIN			; get next line
+		set i, z			; i points to the next line
+:DLIN1	sti [j], [i]		; copy a byte
+		ifn [j], 0xFFFF		; check if we are at the end of the text area
+		set pc, DLIN1		; if not keep copying
+		set [j], 0x11		; line 0xFFFF only has a return so make sure its filled in
+		set [text_end], j	; change the text end as well
+:DLIN2	set i, pop
+		set j, pop
+		set pc, pop
+; this will insert a new line at I to line address of Z
+; if the line just contains a 0x11 then nothing is insearted
+; SLOW this can be sped up signifigantly, with better memory moves and allocation
+; but this is just a toy so not going to do it right off.  If we DO change something
+; turn this into a byte code il instead of raw text
+:ILIN	set push, j
+		set push, i
+		set j, 0		; set j to the size of i
+:ILIN0	ifn [i], 0x11
+		sti pc, ILIN0		; check if end of line
+		add j, 1			; add 0x11 
+		add j, [text_end]	; add j to the end pointer
+		set i, [text_end]	; set i to he text end as j points to the new loc
+		set [text_end], j	; save new end pointer
+:ILIN1  std [j], [i]		; copy first byte
+		ifn j, z			; if i equals the pointer to the line
+		set pc, ILIN1		; loop
+		;set [j], [i]		; don't forget to copy the line number!
+		set i, peek			; restore the text pointer
+		set j, z			; set j to the original line address
+:ILIN2  sti [j], [i]		; copy the string to the text area
+		ifn [j+0xFFFF], 0x11		; check if we are at the end of the string
+		set pc, ILIN2		; loop
+		set i, pop			; clean up and return
+		set j, pop
+		set pc, pop
+		
+:text_begin DAT 0x6000	
+:text_end   DAT 0x6000		;<- this should be at the END of the program
+							;<- remember for me to change the screen buffer so it points somewhere else

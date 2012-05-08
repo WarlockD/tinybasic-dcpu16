@@ -1,0 +1,149 @@
+;     Scrolling text editor
+;
+;         by @lowey2002
+; http://0x10co.de/9t90r
+;
+; Update: 
+;     fixed bug in last character scrolling
+;     fixed cursor bug
+SET PC, init_basic
+DAT 0,0,0,0
+:text_area
+DAT 0x4000
+:line_size
+DAT 0
+
+:init_basic
+	JSR hardware_init
+	JSR basic_new
+	JSR init_textarea		; initalize text area
+:command_loop
+		JSR getline
+		JSR remove_spaces	; get rid of the spaces in the buffer
+		jsr TSTN
+		DAT direct_command
+		sub i,1 			; sub i by one
+		set [i], a			; set the line number at the begining of the line
+		set y, a			; put line number in y
+		jsr FLIN			; find it
+		ife [i+1], 0x11		; if its an empty line
+		set pc, CMD0		; delete the line
+		jsr ILIN			; else insert line
+		set pc, command_loop
+:CMD0	ife y, [z]			; if the line exists
+		jsr DLIN			; delete
+		set pc, command_loop
+:direct_command
+	set a, 0
+	;JSR print_string
+	;set i, pop
+	set y, 0xFFFF		; debug, forceing it not to run lines
+	JSR DIRECT
+	;JSR print_short
+	;set [j], 0x11
+	;JSR print_string
+	set pc, command_loop
+	
+	JSR test_short
+	ifn j,i
+	set pc, command_loop
+	set j, table_direct
+	JSR exec
+	ife c, 0
+	set pc, QSORRY
+	JSR C
+	
+	JSR print_short
+	SET [j], 0x11
+	JSR print_string
+	set pc, command_loop
+	
+
+
+
+
+; new command, clears the text area
+:basic_new
+	set push, j
+	set push, i
+	set i, [text_area]
+	sti [i], 0xFFFF
+	sti [i], 0x11
+	set i, pop
+	set j, pop
+	set pc, pop
+
+:line_buffer
+DAT 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+DAT 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+DAT 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+DAT 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+; I can't stand no more!
+; This function takes buffer I, and removes ALL the spaces
+; expcet for things between "
+; I was getting tired of having to test for whitespace and 
+; tokens
+:strcpyl
+		set push, i
+:SC0	sti [i], [j]
+		ifn [i], 0x11
+		set pc, SC0
+		set i, pop
+		set pc, pop
+	
+:remove_spaces
+ 		set push, i		; push the original string
+ 		set push, j		; because we thrash it
+:RS0	ifn [i], ' '	; do we have a space?
+		set pc, RS1		; no, check quotes
+		set push, i   
+:RSS0	sti [i], [i+1]	; shift chars
+		ifn [i], 0x11	; check end of string
+		set pc, RSS0	; if not copy another charater
+		set i, pop		; restore, i
+		set pc, RS0
+:RS1	ifn [i], '"'	; check if we have quotes
+		set pc, RS2		; if not goto get line
+		add i, 1
+:RSQ0	ife [i], 0x11
+		set pc, RS3		; missing ending ", error here
+		ifn [i], '"'
+		sti pc, RSQ0	; loop till "
+:RS2	ife [i], 0x11	; end of line?
+		set pc, RS3		; quit
+		add i, 1		; next char
+		set pc, RS0		; start again
+:RS3	set j, pop
+		set i, pop
+		set pc, pop
+
+; Handle keyboard input  f
+:getline
+	set push, c
+	set i, line_buffer		 ; clear line
+	set j, 0				 ; line size
+	set c, '>'
+:getline_printlast
+	JSR putchar
+:getline_loop
+	JSR getchar_block
+	ife C, 0x10				; handle backspace on the line
+	set pc, getline_backspace
+	sti [i], c
+	ife C, 0x11				; if note end of line get another charater			  
+	set pc, getline_return
+	set pc, getline_printlast
+:getline_backspace
+	ife j,0
+	set pc, getline_loop
+	std [i], 0x11
+	set pc, getline_printlast
+:getline_return
+	JSR putchar
+	set c, pop
+	set i, line_buffer		 ; return line buffer
+	set pc,pop
+
+
+
+
